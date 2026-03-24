@@ -120,7 +120,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: mlruns-data
-          path: mlruns
+          path: .
         continue-on-error: true
 
       - name: Check model threshold

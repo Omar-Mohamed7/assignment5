@@ -7,13 +7,24 @@ from mlflow.tracking import MlflowClient
 RUN_ID_FILE = "model_info.txt"
 
 
+def fetch_run(client: MlflowClient, run_id: str):
+    try:
+        return client.get_run(run_id)
+    except Exception:
+        return None
+
+
 def main() -> int:
     threshold = float(os.environ.get("ACCURACY_THRESHOLD", "0.85"))
 
     tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
     if not tracking_uri:
-        print("ERROR: MLFLOW_TRACKING_URI is not set.")
-        return 1
+        if os.path.exists("mlruns"):
+            tracking_uri = "file:./mlruns"
+            print("MLFLOW_TRACKING_URI is not set. Falling back to local file tracking.")
+        else:
+            print("ERROR: MLFLOW_TRACKING_URI is not set and no local mlruns directory was found.")
+            return 1
 
     if not os.path.exists(RUN_ID_FILE):
         print(f"ERROR: {RUN_ID_FILE} not found.")
@@ -28,11 +39,20 @@ def main() -> int:
 
     mlflow.set_tracking_uri(tracking_uri)
     client = MlflowClient()
+    run = fetch_run(client, run_id)
 
-    try:
-        run = client.get_run(run_id)
-    except Exception as exc:
-        print(f"ERROR: Could not fetch run {run_id}: {exc}")
+    # GitHub artifact downloads can place data under ./mlruns/mlruns.
+    if run is None and os.path.exists("mlruns/mlruns"):
+        nested_tracking_uri = "file:./mlruns/mlruns"
+        mlflow.set_tracking_uri(nested_tracking_uri)
+        client = MlflowClient()
+        run = fetch_run(client, run_id)
+        if run is not None:
+            tracking_uri = nested_tracking_uri
+            print("Run not found in file:./mlruns. Retried with file:./mlruns/mlruns.")
+
+    if run is None:
+        print(f"ERROR: Could not fetch run {run_id} from tracking URI {tracking_uri}.")
         return 1
 
     accuracy = run.data.metrics.get("accuracy")
