@@ -1,0 +1,117 @@
+name: Model Validation and Deploy
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      accuracy_threshold:
+        description: "Minimum accuracy required for deployment"
+        required: false
+        default: "0.85"
+
+jobs:
+  validate:
+    name: Validate Model
+    runs-on: ubuntu-latest
+    env:
+      MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          pip install mlflow dvc scikit-learn
+
+      - name: Pull data with DVC
+        run: dvc pull
+
+      - name: Train model
+        run: python train.py
+
+      - name: Export current MLflow Run ID
+        run: |
+          python - <<'PY'
+          import os
+          import mlflow
+          from mlflow.tracking import MlflowClient
+
+          tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
+          if not tracking_uri:
+              raise RuntimeError("MLFLOW_TRACKING_URI is not set.")
+
+          mlflow.set_tracking_uri(tracking_uri)
+          client = MlflowClient()
+
+          experiments = client.search_experiments(view_type=1)
+          if not experiments:
+              raise RuntimeError("No MLflow experiments found.")
+
+          experiment_ids = [exp.experiment_id for exp in experiments]
+          runs = client.search_runs(
+              experiment_ids=experiment_ids,
+              order_by=["attributes.start_time DESC"],
+              max_results=1,
+          )
+
+          if not runs:
+              raise RuntimeError("No MLflow runs found after training.")
+
+          run_id = runs[0].info.run_id
+          with open("model_info.txt", "w", encoding="utf-8") as f:
+              f.write(run_id)
+          print(f"Saved run_id={run_id} to model_info.txt")
+          PY
+
+      - name: Upload model info artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-info
+          path: model_info.txt
+
+  deploy:
+    name: Deploy Model
+    runs-on: ubuntu-latest
+    needs: validate
+    env:
+      MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+      ACCURACY_THRESHOLD: ${{ github.event.inputs.accuracy_threshold || '0.85' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          pip install mlflow
+
+      - name: Download model info artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: model-info
+          path: .
+
+      - name: Check model threshold
+        run: python check_threshold.py
+
+      - name: Mock Build
+        run: |
+          echo "Building Docker image for Run ID: $(cat model_info.txt)"
