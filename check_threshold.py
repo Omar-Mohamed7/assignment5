@@ -16,31 +16,60 @@ def fetch_run(client: MlflowClient, run_id: str):
         return None
 
 
+def parse_accuracy_metric_file(metric_file: Path) -> Optional[float]:
+    if not metric_file.exists():
+        return None
+
+    lines = [line.strip() for line in metric_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not lines:
+        return None
+
+    # MLflow file metric format is generally: "timestamp value step".
+    parts = lines[-1].split()
+    if len(parts) < 2:
+        return None
+
+    try:
+        return float(parts[1])
+    except ValueError:
+        return None
+
+
 def read_accuracy_from_mlruns(run_id: str) -> Optional[float]:
     """Find a local MLflow run directory by run_id and read its accuracy metric."""
     mlruns_root = Path("mlruns")
     if not mlruns_root.exists():
         return None
 
+    # Case 1: run directory name is the run_id.
     for candidate in mlruns_root.rglob(run_id):
         if candidate.is_dir():
             metric_file = candidate / "metrics" / "accuracy"
-            if not metric_file.exists():
-                continue
+            parsed = parse_accuracy_metric_file(metric_file)
+            if parsed is not None:
+                return parsed
 
-            lines = [line.strip() for line in metric_file.read_text(encoding="utf-8").splitlines() if line.strip()]
-            if not lines:
-                continue
+    # Case 2: find matching run_id in meta.yaml, then read sibling metrics/accuracy.
+    for meta_file in mlruns_root.rglob("meta.yaml"):
+        try:
+            meta_text = meta_file.read_text(encoding="utf-8")
+        except Exception:
+            continue
 
-            # MLflow file metric format is generally: "timestamp value step".
-            parts = lines[-1].split()
-            if len(parts) < 2:
-                continue
+        if run_id in meta_text:
+            metric_file = meta_file.parent / "metrics" / "accuracy"
+            parsed = parse_accuracy_metric_file(metric_file)
+            if parsed is not None:
+                return parsed
 
-            try:
-                return float(parts[1])
-            except ValueError:
-                continue
+    # Case 3: last-resort fallback, use most recently modified accuracy metric file.
+    metric_candidates = [p for p in mlruns_root.rglob("accuracy") if p.is_file() and p.parent.name == "metrics"]
+    if metric_candidates:
+        latest_metric_file = max(metric_candidates, key=lambda p: p.stat().st_mtime)
+        parsed = parse_accuracy_metric_file(latest_metric_file)
+        if parsed is not None:
+            print(f"Using latest local accuracy metric fallback: {latest_metric_file}")
+            return parsed
 
     return None
 
