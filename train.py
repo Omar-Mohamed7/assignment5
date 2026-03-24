@@ -17,7 +17,7 @@ def main():
         X, y, test_size=0.2, random_state=42, stratify=y
     )
 
-    model = LogisticRegression(max_iter=500, solver="liblinear")
+    model = LogisticRegression(max_iter=1)
 
     with mlflow.start_run() as run:
         model.fit(X_train, y_train)
