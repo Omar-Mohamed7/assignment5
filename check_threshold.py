@@ -1,5 +1,7 @@
 import os
 import sys
+from pathlib import Path
+from typing import Optional
 
 import mlflow
 from mlflow.tracking import MlflowClient
@@ -12,6 +14,35 @@ def fetch_run(client: MlflowClient, run_id: str):
         return client.get_run(run_id)
     except Exception:
         return None
+
+
+def read_accuracy_from_mlruns(run_id: str) -> Optional[float]:
+    """Find a local MLflow run directory by run_id and read its accuracy metric."""
+    mlruns_root = Path("mlruns")
+    if not mlruns_root.exists():
+        return None
+
+    for candidate in mlruns_root.rglob(run_id):
+        if candidate.is_dir():
+            metric_file = candidate / "metrics" / "accuracy"
+            if not metric_file.exists():
+                continue
+
+            lines = [line.strip() for line in metric_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+            if not lines:
+                continue
+
+            # MLflow file metric format is generally: "timestamp value step".
+            parts = lines[-1].split()
+            if len(parts) < 2:
+                continue
+
+            try:
+                return float(parts[1])
+            except ValueError:
+                continue
+
+    return None
 
 
 def main() -> int:
@@ -51,13 +82,17 @@ def main() -> int:
             tracking_uri = nested_tracking_uri
             print("Run not found in primary local tracking path. Retried nested mlruns path.")
 
-    if run is None:
-        print(f"ERROR: Could not fetch run {run_id} from tracking URI {tracking_uri}.")
-        return 1
+    accuracy = None
+    if run is not None:
+        accuracy = run.data.metrics.get("accuracy")
 
-    accuracy = run.data.metrics.get("accuracy")
     if accuracy is None:
-        print(f"ERROR: Run {run_id} has no 'accuracy' metric.")
+        accuracy = read_accuracy_from_mlruns(run_id)
+        if accuracy is not None:
+            print("MLflow API lookup failed; using accuracy from local mlruns files.")
+
+    if accuracy is None:
+        print(f"ERROR: Could not fetch accuracy for run {run_id} from tracking URI {tracking_uri} or local mlruns files.")
         return 1
 
     print(f"Run ID: {run_id}")
