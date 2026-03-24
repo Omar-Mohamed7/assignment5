@@ -10,6 +10,9 @@ on:
         required: false
         default: "0.85"
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     name: Validate Model
@@ -27,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install mlflow dvc scikit-learn
+          pip install mlflow scikit-learn dvc
 
       - name: Configure MLflow tracking
         run: |

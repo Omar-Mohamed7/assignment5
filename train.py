@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import mlflow
 import mlflow.sklearn
 from sklearn.datasets import load_breast_cancer
@@ -17,12 +18,14 @@ def main():
         X, y, test_size=0.2, random_state=42, stratify=y
     )
 
-    model = LogisticRegression(max_iter=1)
+    model = LogisticRegression(max_iter=1)  # intentionally bad model
 
     with mlflow.start_run() as run:
         model.fit(X_train, y_train)
 
-        preds = model.predict(X_test)
+        # 🔥 force bad predictions (guaranteed low accuracy)
+        preds = np.random.randint(0, 2, size=len(y_test))
+
         acc = accuracy_score(y_test, preds)
 
         mlflow.log_metric("accuracy", acc)

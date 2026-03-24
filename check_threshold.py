@@ -24,10 +24,10 @@ def main():
     print(f"Threshold: {threshold:.2f}")
 
     if accuracy < threshold:
-        print("FAIL: Accuracy below threshold")
+        print("❌ FAIL: Accuracy below threshold — deployment blocked")
         return 1
 
-    print("PASS: Deployment allowed")
+    print("✅ PASS: Deployment allowed")
     return 0
 
 
