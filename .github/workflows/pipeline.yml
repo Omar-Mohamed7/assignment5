@@ -45,42 +45,16 @@ jobs:
             echo "No DVC metadata found in repository. Skipping pull."
           fi
 
-      - name: Train model
-        run: python train.py
-
-      - name: Export current MLflow Run ID
+      - name: Train model and export current MLflow Run ID
         run: |
-          python - <<'PY'
-          import os
-          import mlflow
-          from mlflow.tracking import MlflowClient
-
-          tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
-          if not tracking_uri:
-              raise RuntimeError("MLFLOW_TRACKING_URI is not set.")
-
-          mlflow.set_tracking_uri(tracking_uri)
-          client = MlflowClient()
-
-          experiments = client.search_experiments(view_type=1)
-          if not experiments:
-              raise RuntimeError("No MLflow experiments found.")
-
-          experiment_ids = [exp.experiment_id for exp in experiments]
-          runs = client.search_runs(
-              experiment_ids=experiment_ids,
-              order_by=["attributes.start_time DESC"],
-              max_results=1,
-          )
-
-          if not runs:
-              raise RuntimeError("No MLflow runs found after training.")
-
-          run_id = runs[0].info.run_id
-          with open("model_info.txt", "w", encoding="utf-8") as f:
-              f.write(run_id)
-          print(f"Saved run_id={run_id} to model_info.txt")
-          PY
+          python train.py | tee train_output.log
+          run_id=$(grep -Eo 'Run ID: [a-f0-9]{32}' train_output.log | awk '{print $3}' | tail -n 1)
+          if [ -z "$run_id" ]; then
+            echo "ERROR: Could not find Run ID in training output."
+            exit 1
+          fi
+          echo "$run_id" > model_info.txt
+          echo "Saved run_id=$run_id to model_info.txt"
 
       - name: Upload model info artifact
         uses: actions/upload-artifact@v4
