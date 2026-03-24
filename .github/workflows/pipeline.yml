@@ -37,7 +37,7 @@ jobs:
             echo "MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}" >> "$GITHUB_ENV"
             echo "Using MLflow tracking server from secret."
           else
-            echo "MLFLOW_TRACKING_URI=file:./mlruns" >> "$GITHUB_ENV"
+            echo "MLFLOW_TRACKING_URI=$GITHUB_WORKSPACE/mlruns" >> "$GITHUB_ENV"
             echo "MLFLOW_TRACKING_URI secret not set. Using local file tracking."
           fi
 
@@ -106,7 +106,7 @@ jobs:
             echo "MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}" >> "$GITHUB_ENV"
             echo "Using MLflow tracking server from secret."
           else
-            echo "MLFLOW_TRACKING_URI=file:./mlruns" >> "$GITHUB_ENV"
+            echo "MLFLOW_TRACKING_URI=$GITHUB_WORKSPACE/mlruns" >> "$GITHUB_ENV"
             echo "MLFLOW_TRACKING_URI secret not set. Using local file tracking."
           fi
 

@@ -20,7 +20,7 @@ def main() -> int:
     tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
     if not tracking_uri:
         if os.path.exists("mlruns"):
-            tracking_uri = "file:./mlruns"
+            tracking_uri = os.path.abspath("mlruns")
             print("MLFLOW_TRACKING_URI is not set. Falling back to local file tracking.")
         else:
             print("ERROR: MLFLOW_TRACKING_URI is not set and no local mlruns directory was found.")
@@ -43,13 +43,13 @@ def main() -> int:
 
     # GitHub artifact downloads can place data under ./mlruns/mlruns.
     if run is None and os.path.exists("mlruns/mlruns"):
-        nested_tracking_uri = "file:./mlruns/mlruns"
+        nested_tracking_uri = os.path.abspath("mlruns/mlruns")
         mlflow.set_tracking_uri(nested_tracking_uri)
         client = MlflowClient()
         run = fetch_run(client, run_id)
         if run is not None:
             tracking_uri = nested_tracking_uri
-            print("Run not found in file:./mlruns. Retried with file:./mlruns/mlruns.")
+            print("Run not found in primary local tracking path. Retried nested mlruns path.")
 
     if run is None:
         print(f"ERROR: Could not fetch run {run_id} from tracking URI {tracking_uri}.")
