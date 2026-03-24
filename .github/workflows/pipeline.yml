@@ -34,7 +34,16 @@ jobs:
           pip install mlflow dvc scikit-learn
 
       - name: Pull data with DVC
-        run: dvc pull
+        run: |
+          if ls ./*.dvc >/dev/null 2>&1 || [ -f dvc.yaml ]; then
+            if dvc remote list | grep -q .; then
+              dvc pull
+            else
+              echo "DVC metadata found, but no DVC remote configured. Skipping pull."
+            fi
+          else
+            echo "No DVC metadata found in repository. Skipping pull."
+          fi
 
       - name: Train model
         run: python train.py
